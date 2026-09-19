@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GeoScope — area intelligence on a globe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Archivo:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link href="https://cesium.com/downloads/cesiumjs/releases/1.119/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wordmark"><span class="word-geo">Geo</span><span class="word-scope">Scope</span></div>
+
+  <div class="readout" aria-live="polite">
+    <span class="tick"></span>
+    <span id="cursorCoords" class="mono">——.————°, ——.————°</span>
+    <span class="tick"></span>
+    <span id="readoutStatus" class="mono dim">hover the globe</span>
+    <span class="tick"></span>
+  </div>
+
+  <nav class="tabs" role="tablist">
+    <button id="tabExplore" class="tab active" role="tab" aria-selected="true">Explore</button>
+    <button id="tabSaved" class="tab" role="tab" aria-selected="false">Saved lookups <span id="savedCount" class="count"></span></button>
+    <button id="tabWatch" class="tab" role="tab" aria-selected="false">Watching <span id="watchCount" class="count"></span></button>
+    <button id="tabSpace" class="tab" role="tab" aria-selected="false">Space</button>
+    <button id="settingsBtn" class="tab gear" title="Display settings" aria-label="Display settings">⚙</button>
+  </nav>
+
+  <div id="settingsPanel" class="settings-pop" hidden>
+    <h4>Display settings</h4>
+    <div class="set-group">
+      <span class="set-label">Distance</span>
+      <div class="seg" data-setting="dist">
+        <button data-val="mi">Miles</button><button data-val="km">Kilometers</button><button data-val="both">Both</button>
+      </div>
+    </div>
+    <div class="set-group">
+      <span class="set-label">Temperature</span>
+      <div class="seg" data-setting="temp">
+        <button data-val="f">°F</button><button data-val="c">°C</button><button data-val="both">Both</button>
+      </div>
+    </div>
+    <div class="set-group">
+      <span class="set-label">Clock</span>
+      <div class="seg" data-setting="clock">
+        <button data-val="12">12-hour</button><button data-val="24">24-hour</button>
+      </div>
+    </div>
+    <div class="set-group">
+      <label class="set-label" for="setLang">Language (previews &amp; place names)</label>
+      <select id="setLang" class="set-select">
+        <option value="en">English</option>
+        <option value="es">Español</option>
+        <option value="fr">Français</option>
+        <option value="de">Deutsch</option>
+        <option value="pt">Português</option>
+        <option value="it">Italiano</option>
+        <option value="nl">Nederlands</option>
+        <option value="pl">Polski</option>
+        <option value="sv">Svenska</option>
+        <option value="ru">Русский</option>
+        <option value="uk">Українська</option>
+        <option value="tr">Türkçe</option>
+        <option value="ar">العربية</option>
+        <option value="fa">فارسی</option>
+        <option value="he">עברית</option>
+        <option value="hi">हिन्दी</option>
+        <option value="zh">中文</option>
+        <option value="ja">日本語</option>
+        <option value="ko">한국어</option>
+        <option value="vi">Tiếng Việt</option>
+        <option value="id">Bahasa Indonesia</option>
+      </select>
+    </div>
+    <div class="set-group">
+      <span class="set-label">Translate infrastructure categories</span>
+      <div class="seg" data-setting="infraLang">
+        <button data-val="on">On</button><button data-val="off">Off</button>
+      </div>
+    </div>
+    <p class="set-note">Saved in this browser. Place names use OpenStreetMap's own translations and show the original alongside; previews use that language's Wikipedia edition when one exists.</p>
+  </div>
+</header>
+
+<main>
+  <section id="globeWrap">
+    <div id="globe"></div>
+
+    <div class="geo-search">
+      <form id="searchForm" role="search" autocomplete="off">
+        <span class="search-icon" aria-hidden="true">⌕</span>
+        <input id="searchInput" type="search" placeholder="Search a place or paste lat, lon" aria-label="Search a place or enter coordinates" />
+      </form>
+      <div id="searchResults" class="search-results" hidden></div>
+    </div>
+
+    <div class="zoom-stack">
+      <button id="zoomIn" aria-label="Zoom in">+</button>
+      <button id="zoomOut" aria-label="Zoom out">−</button>
+    </div>
+    <button id="showPanelBtn" hidden aria-label="Show report panel">‹ Report</button>
+    <button id="trackStop" hidden aria-label="Stop following this satellite">✕ Stop following</button>
+    <div id="infraLegend" class="infra-legend" hidden></div>
+
+    <div class="controls">
+      <label class="ctl-label" for="radiusRange">Circle radius</label>
+      <div class="radius-row">
+        <button id="radMinus" class="rad-step" aria-label="Decrease radius by 1">−</button>
+        <input id="radiusRange" type="range" min="1" max="250" step="1" value="25" />
+        <button id="radPlus" class="rad-step" aria-label="Increase radius by 1">+</button>
+        <output id="radiusOut" class="mono" title="Click to type an exact radius">25 mi</output>
+      </div>
+      <p class="hint">Click to drop the circle. Zoom keeps sharpening down to street level, so you can verify the exact spot before analyzing.</p>
+      <div class="btn-row">
+        <button id="layerBtn" class="ghost small">Map view</button>
+        <button id="analyzeBtn" class="primary" disabled>Analyze this area</button>
+      </div>
+    </div>
+  </section>
+
+  <aside id="panel">
+    <div class="pane-tools">
+      <button id="panelFullBtn" title="Toggle full-screen report" aria-label="Toggle full-screen report">⛶</button>
+      <button id="panelHideBtn" title="Hide report panel" aria-label="Hide report panel">›</button>
+    </div>
+    <!-- Explore view -->
+    <div id="exploreView" class="view">
+      <div id="emptyState">
+        <p class="empty-display">Pick a point<br/><em>anywhere on Earth.</em></p>
+        <p class="empty-sub">GeoScope reads the exact coordinates you click — never a place name — so the report always describes <strong>this</strong> spot, not a town elsewhere that shares its name. Everything inside your circle gets gathered: people, weather past and present, settlements, landmarks.</p>
+      </div>
+      <div id="report" hidden></div>
+    </div>
+
+    <!-- Saved view -->
+    <div id="savedView" class="view" hidden>
+      <h2 class="panel-title">Saved lookups</h2>
+      <p class="panel-sub">Each saved place keeps an immutable timeline of snapshots for its exact spot and radius — press ＋ New snapshot to re-sample it. Stored on this server, so everything survives restarts.</p>
+      <div id="savedList"></div>
+    </div>
+
+    <!-- Watching view -->
+    <div id="watchView" class="view" hidden>
+      <h2 class="panel-title">Watching</h2>
+      <p class="panel-sub">Each watched area is re-checked automatically, paced by how fast each source moves — news every 30 min, earthquakes &amp; severe weather hourly, air quality every 3 h, slower map data weekly. Differences land here as a change log.</p>
+      <div id="watchList"></div>
+    </div>
+
+    <!-- Space view -->
+    <div id="spaceView" class="view" hidden>
+      <h2 class="panel-title">Space</h2>
+      <p class="panel-sub">Live orbits above the globe: both space stations and the ~150 brightest satellites, propagated in your browser from CelesTrak orbital elements — positions are real, not animated. Zoom out to see the whole constellation; it hides itself near street level.</p>
+      <div id="spaceBody"><p class="dim">Loading orbital elements…</p></div>
+    </div>
+
+    <!-- Wikipedia preview: temporarily takes over the panel; ✕ restores the view underneath -->
+    <div id="wikiView" class="view" hidden role="region" aria-label="Wikipedia preview">
+      <button id="wikiClose" aria-label="Close preview and return to the panel">✕</button>
+      <div id="wikiBody"></div>
+    </div>
+  </aside>
+</main>
+
+<script src="https://cesium.com/downloads/cesiumjs/releases/1.119/Build/Cesium/Cesium.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/satellite.js/5.0.0/satellite.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

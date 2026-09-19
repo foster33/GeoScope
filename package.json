@@ -1,0 +1,17 @@
+{
+  "name": "geoscope",
+  "version": "1.0.0",
+  "description": "Interactive 3D globe area intelligence - draw a radius anywhere on Earth and get a full report on it",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

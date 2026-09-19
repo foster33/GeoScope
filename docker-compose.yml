@@ -1,0 +1,12 @@
+services:
+  geoscope:
+    build: .
+    container_name: geoscope
+    ports:
+      - "8090:8080"
+    volumes:
+      - geoscope-data:/data
+    restart: unless-stopped
+
+volumes:
+  geoscope-data:
