@@ -46,7 +46,7 @@ export const isValidLatLon = (lat, lon) =>
    Express's default HTML page, which the frontend can't parse. An HttpError
    carries a message meant for the user (a 502 says which upstream failed and
    why); anything else is a bug, so it is logged and its message hidden. */
-export function jsonErrorHandler(err, _req, res, _next) { // eslint-disable-line no-unused-vars
+export function jsonErrorHandler(err, _req, res, _next) { // four params: that is how Express recognizes an error handler
   if (err instanceof HttpError) return res.status(err.status).json({ error: err.message });
   const status = err.status || err.statusCode || 500; // body-parser errors carry their own status
   if (status >= 500) console.error(err);

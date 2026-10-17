@@ -6,6 +6,12 @@ services:
       - "8090:8080"
     volumes:
       - geoscope-data:/data
+    environment:
+      # Identify your instance to Nominatim and the Overpass operators
+      # (an email address or URL). See README → Configuration.
+      # GEOSCOPE_CONTACT: you@example.com
+      # AREA_CACHE_MS: "300000"
+      TZ: UTC
     restart: unless-stopped
 
 volumes:

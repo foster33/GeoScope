@@ -8,7 +8,6 @@
  */
 import { api, qs } from "./api.js";
 import { settings, tInfra, localized } from "./settings.js";
-import { esc } from "./format.js";
 import { viewer, flyToCircle } from "./globe.js";
 import { setStatus, flashStatus } from "./status.js";
 import { SURV_CATS, SURV_NAMES } from "./report-model.js";

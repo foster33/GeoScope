@@ -2,6 +2,8 @@
 
 An interactive 3D globe with street-level tile resolution. Click anywhere on Earth, set a circle radius (1–250 miles), and get a full intelligence report on everything inside it — then save reports to a history tab, or **watch** an area so the server re-checks it on a schedule and logs every change.
 
+![A 10-mile circle over Springfield, Illinois on the satellite globe, with the report panel showing the summary paragraph, all twelve data sources reported, and the location section](docs/screenshot.png)
+
 ## Run it
 
 ```bash
@@ -168,6 +170,8 @@ All sources are free public services (Nominatim, Overpass, Open-Meteo, Wikidata,
 GeoScope is designed for **personal self-hosting** — one instance, one operator, watch slots capped, every upstream call paced. That isn't a missing feature; it's the honest size for a polite citizen of these public APIs.
 
 ## Development
+
+Contributions welcome — [CONTRIBUTING.md](CONTRIBUTING.md) has the layout, the offline dev server, the checks CI runs, and the ground rules (coordinates over names, one request per source, no machine translation).
 
 Designed and built in collaboration with Anthropic's **Claude (Fable 5)** as an exercise in AI-assisted development: architecture decisions, data-source vetting (including verifying API behavior live before integrating, and cutting sources whose rate limits proved hostile), and browser-level verification of every feature were driven through iterative sessions with the model. Every capability in this README was tested end-to-end in a real browser against the running container before landing.
 

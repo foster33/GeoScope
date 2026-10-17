@@ -12,7 +12,6 @@
  * Requests that need the analysis owner (retry a source, clear the report)
  * go out as events so this module stays free of that dependency.
  */
-import { $ } from "./dom.js";
 import { api } from "./api.js";
 import { settings, tInfra, localized } from "./settings.js";
 import {

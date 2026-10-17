@@ -1,0 +1,17 @@
+# The Dockerfile copies only what the server needs; keep the build context
+# small so `docker compose up --build` doesn't ship node_modules (with
+# Playwright's browsers) or git history to the daemon.
+node_modules
+.git
+data
+test
+e2e
+fixtures
+scripts
+docs
+test-results
+playwright-report
+playwright.config.js
+eslint.config.js
+.github
+*.md
