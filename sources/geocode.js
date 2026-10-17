@@ -53,11 +53,14 @@ export async function reverseGeocode(lat, lon) {
    Keyless; any failure simply omits the affected row. */
 let currencyByCountry = null;   // cca2 -> { code, name, symbol }
 let languagesByCountry = null;  // cca2 -> [ "English", "French", ... ]
+let countryLoad = null;         // in-flight dataset fetch, shared by concurrent callers
 let usdRates = null, usdRatesAt = 0;
+let ratesLoad = null;
 
-async function ensureCountryData() {
-  if (currencyByCountry && languagesByCountry) return;
-  const list = await fetchJson("https://raw.githubusercontent.com/mledoze/countries/master/countries.json", {}, 30000);
+const RATES_TTL_MS = 12 * 3600000;
+
+/* pure: the raw dataset -> the two lookup maps (exported for tests) */
+export function indexCountries(list) {
   const cur = {}, langs = {};
   for (const c of list) {
     if (!c.cca2) continue;
@@ -67,8 +70,35 @@ async function ensureCountryData() {
     if (names.length) langs[c.cca2] = names;
   }
   if (!Object.keys(cur).length) throw new Error("empty country dataset");
-  currencyByCountry = cur;
-  languagesByCountry = langs;
+  return { currencies: cur, languages: langs };
+}
+
+/* The first report after boot triggers the currency and language lookups at
+   the same moment; sharing one in-flight promise fetches the dataset once, and
+   a failed fetch is forgotten so the next caller retries. */
+async function ensureCountryData() {
+  if (currencyByCountry && languagesByCountry) return;
+  if (!countryLoad) {
+    countryLoad = fetchJson("https://raw.githubusercontent.com/mledoze/countries/master/countries.json", {}, 30000)
+      .then((list) => {
+        const idx = indexCountries(list);
+        currencyByCountry = idx.currencies;
+        languagesByCountry = idx.languages;
+      })
+      .finally(() => { countryLoad = null; });
+  }
+  await countryLoad;
+}
+
+async function ensureUsdRates() {
+  if (usdRates && Date.now() - usdRatesAt <= RATES_TTL_MS) return;
+  if (!ratesLoad) {
+    ratesLoad = fetchJson("https://open.er-api.com/v6/latest/USD")
+      .then((j) => { if (j?.rates) { usdRates = j.rates; usdRatesAt = Date.now(); } })
+      .catch(() => { /* rate part omitted, currency still shown */ })
+      .finally(() => { ratesLoad = null; });
+  }
+  await ratesLoad;
 }
 
 export async function countryCurrency(cc) {
@@ -76,12 +106,7 @@ export async function countryCurrency(cc) {
   await ensureCountryData();
   const cur = currencyByCountry[cc];
   if (!cur) return null;
-  if (!usdRates || Date.now() - usdRatesAt > 12 * 3600000) {
-    try {
-      const j = await fetchJson("https://open.er-api.com/v6/latest/USD");
-      if (j?.rates) { usdRates = j.rates; usdRatesAt = Date.now(); }
-    } catch { /* rate part omitted, currency still shown */ }
-  }
+  await ensureUsdRates();
   const rate = usdRates?.[cur.code];
   return { ...cur, perUsd: rate ? Math.round(rate * 10000) / 10000 : null };
 }

@@ -18,6 +18,19 @@ docker run -p 8080:8080 -v geoscope-data:/data geoscope
 
 The container needs outbound internet access (it queries public, key-free data APIs). The browser loads CesiumJS, fonts, and map tiles (CARTO dark basemap + Esri satellite imagery) from CDNs; tiles stream at increasing resolution as you zoom, down to street level, with a Map/Satellite toggle for verifying the exact spot.
 
+Without Docker (Node 20+): `npm install && npm start`, then open http://localhost:8080.
+
+### Configuration
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `PORT` | `8080` | Listen port |
+| `DATA_DIR` | `./data` (`/data` in the container) | Where saved places and watches persist (two JSON files, written atomically) |
+| `AREA_CACHE_MS` | `300000` | TTL of the hot-path report cache (5 minutes) |
+| `GEOSCOPE_CONTACT` | `localhost` | Contact (email or URL) sent in the outbound `User-Agent`. Nominatim and the Overpass operators ask every client to be reachable — set this when you self-host. |
+
+GeoScope has no authentication: every `/api` route is an open relay to the public services above. Run it on your LAN or behind something that does authenticate; exposed to the internet it would become a free proxy and get its IP banned upstream.
+
 ## What's in a report
 
 | Section | Source | Notes |
@@ -90,7 +103,14 @@ The ⚙ menu (top right) sets display units, stored in the browser: distance (mi
 geoscope/
 ├── Dockerfile            node:20-alpine, single container
 ├── docker-compose.yml    maps port 8080, mounts /data volume
-├── server.js             Express wiring: routes + the stateful watch scheduler
+├── server.js             entry point: reads the environment, builds the app, starts the scheduler
+├── server/
+│   ├── app.js            createApp(): Express wiring with no side effects (tests boot it in-process)
+│   ├── http.js           shared validation (lat/lon/radius), HttpError, JSON error handling
+│   ├── parts.js          one handler per report section + the seven-source /api/area report
+│   ├── history.js        saved-place timelines: pure model functions + the file store + migration
+│   ├── store.js          atomic JSON file persistence
+│   └── routes/           one router per feature: report, history, watches, wiki, space, infrapoints
 ├── lib/
 │   ├── net.js            shared fetch discipline (UA, timeouts, WDQS retry, Overpass mirrors)
 │   ├── geo.js            pure geo/numeric helpers (haversine, clamp, unit labels)
@@ -101,30 +121,49 @@ geoscope/
 │                         infrastructure, surveillance, earthquakes, people, landmarks,
 │                         news, wiki, space) — each independently importable & testable
 ├── watch/
+│   ├── engine.js         the scheduler: due checks, baselines, change log, notification retry
 │   ├── watchers.js       per-source cadence + pure diff/next change-detection logic
 │   └── notify.js         ntfy / Discord / JSON notification dispatch
-├── test/                 node:test unit tests for the pure logic (run `npm test`)
+├── fixtures/             deterministic fakes for every upstream API (used by tests and `npm run dev`)
+├── test/                 node:test suite: unit, source, scheduler, saved-place and route tests
+├── e2e/                  Playwright browser suite against the real server + fixture upstreams
 └── public/
     ├── index.html        layout: globe + instrument panel + tabs
     ├── style.css         midnight-atlas theme
-    └── app.js            CesiumJS globe interaction, radius circle, report rendering
+    └── js/               ES modules, no build step:
+        ├── main.js       wiring: init order, what a globe click means, Escape, deep links
+        ├── globe.js      the Cesium viewer, basemaps, selection circle, radius slider
+        ├── analyze.js    the live report: parallel source fan-out, dependency chain, summary
+        ├── render.js     report HTML (one function per section) + live-only actions
+        ├── saved.js / watches.js / space.js     the three other tabs
+        ├── flyovers.js + astro.js               SGP4 pass prediction, pure sun/shadow math
+        ├── diff.js       snapshot and place comparison (pure)
+        ├── plots.js / highlights.js             category plots and temporary pins on the globe
+        ├── search.js / wiki.js / tabs.js / controls.js / settingsUi.js
+        └── format.js / settings.js / api.js / report-model.js / permalink.js / state.js / events.js
 ```
 
 The `/api/area` endpoint fans out to all seven sources in parallel (`Promise.allSettled`), so one slow or failed source never sinks the report — failures are listed at the bottom of the report and a retry re-runs everything.
 
 **Hot-path cache.** Re-clicking the same spot used to re-fan-out every upstream call. A short-TTL, coordinate-rounded cache (≈11 m) now sits in front of `/api/area` and `/api/part`, so a repeat lookup is served from memory — faster, and far politer to the public APIs. Responses carry an `X-GeoScope-Cache: hit|miss` header; the TTL defaults to 5 minutes and is tunable with `AREA_CACHE_MS`.
 
-**Tests.** `npm test` runs the `node:test` suite (zero dependencies) covering the parts whose correctness matters most: the watch differ (AQI band crossings, severe-weather transitions, settlement/infrastructure/quake diffing), the report summarizer, RSS/TLE parsing, place-name disambiguation, and the cache's TTL/LRU behavior.
+**Tests.** Every upstream API has a deterministic fake in `fixtures/upstream.js`, so the whole stack runs without the network:
+
+- `npm test` — the `node:test` suite (no dependencies): pure logic (differ, summarizer, parsers, cache, the browser's formatting/diff/astronomy modules), every data source against the fakes, the watch scheduler with an injected clock, the saved-place timeline rules, and route tests that boot the full Express app on an ephemeral port and pin every endpoint's status codes, error messages, cache headers and response shapes.
+- `npm run test:e2e` — Playwright drives headless Chromium through the real product path (search → analyze → every section → save → timeline diff → watch → notifications → Space tab → previews → settings → deep links → plots) against the real server with fixture upstreams. First run: `npx playwright install chromium`.
+- `npm run dev` — the server with fixture upstreams, for hacking on the UI offline.
+
+GitHub Actions (`.github/workflows/ci.yml`) runs the unit/route suite on Node 20 and 22, the browser suite, and a Docker build that checks the container serves the app.
 
 **Sharing & comparing.** Every report's exact spot+radius is encoded in the URL hash (`#@lat,lon,radius`), so a report is bookmarkable and linkable — a 🔗 Copy link button sits beside Save snapshot, and opening a link auto-drops the circle and runs the report. The Saved tab can tick any two places and **Compare** them side by side, reusing the same client-side diff engine that powers snapshot timelines.
 
 **Search to fly.** A search box over the globe takes a place name (Nominatim forward geocode) or raw `lat, lon` — pick a result and the camera flies there and drops the circle, exactly as a click would, so every report stays coordinate-keyed. The full display name is shown for each candidate so you disambiguate same-named places yourself before analyzing.
 
-**Satellite flyovers.** Every report has a *Satellite flyovers* section answering "when will a satellite pass over THIS point, and where in the sky?" — computed entirely in the browser from the same TLEs + SGP4 propagator that drive the Space tab, so it costs zero extra API calls. It lists upcoming passes (rise time in the point's local zone, max elevation, and compass bearing) and flags the ones **visible to the naked eye** — i.e. the object is sunlit while your sky is dark, via a cylindrical Earth-shadow model and a low-precision solar position.
+**Satellite flyovers.** Every report has a *Satellite flyovers* section answering "when will a satellite pass over THIS point, and where in the sky?" — computed entirely in the browser from the same TLEs + SGP4 propagator that drive the Space tab, so it costs zero extra API calls. Each pass lists rise, peak and set (time in the point's local zone, compass bearing, max elevation, duration) and the exact stretch during which it is **visible to the naked eye** — sunlit while your sky is dark, via a cylindrical Earth-shadow model and a low-precision solar position — since a station can fade into Earth's shadow mid-pass. Stations are flagged *bright*; the rest of the visual group *needs dark sky*. Passes are found on a 30 s grid and then re-sampled at 1 s, so times are exact to a second or two; element sets older than 12 h are refetched before a scan. Checked against independent references: the propagated ISS lands within 1 km of a live tracker and the sun model within a minute of published sunrise/sunset.
 
 ## Polite API usage
 
-All sources are free public services (Nominatim, Overpass, Open-Meteo, Wikidata, Wikipedia, USGS, CelesTrak, Launch Library 2, open.er-api.com). The app sends a proper User-Agent and makes one request per source per analysis; slow-moving data (orbital elements, currency dataset, exchange rates) is cached server-side. If you deploy this beyond personal use, read each service's usage policy and consider caching or self-hosting Nominatim/Overpass.
+All sources are free public services (Nominatim, Overpass, Open-Meteo, Wikidata, Wikipedia, USGS, CelesTrak, Launch Library 2, open.er-api.com). The app sends a proper User-Agent (set `GEOSCOPE_CONTACT` so it names you, not `localhost`) and makes one request per source per analysis; slow-moving data (orbital elements, currency dataset, exchange rates) is cached server-side. If you deploy this beyond personal use, read each service's usage policy and consider caching or self-hosting Nominatim/Overpass.
 
 GeoScope is designed for **personal self-hosting** — one instance, one operator, watch slots capped, every upstream call paced. That isn't a missing feature; it's the honest size for a polite citizen of these public APIs.
 

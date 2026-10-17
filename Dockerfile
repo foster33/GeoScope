@@ -6,6 +6,7 @@ COPY package.json ./
 RUN npm install --omit=dev
 
 COPY server.js ./
+COPY server ./server
 COPY lib ./lib
 COPY sources ./sources
 COPY watch ./watch

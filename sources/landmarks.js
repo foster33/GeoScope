@@ -56,7 +56,7 @@ ORDER BY DESC(?sitelinks) LIMIT 30`;
       title,
       lat: parseFloat(m[2]),
       lon: parseFloat(m[1]),
-      distanceKm: Math.round(parseFloat(b.dist.value) * 10) / 10,
+      distanceKm: Math.round(parseFloat(b.dist?.value ?? "0") * 10) / 10,
       url: b.article?.value || b.item.value.replace("http://www.wikidata.org/entity/", "https://www.wikidata.org/wiki/"),
       sitelinks: parseInt(b.sitelinks?.value || "0", 10),
       source: "wikidata",

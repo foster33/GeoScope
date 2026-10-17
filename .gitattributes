@@ -1,0 +1,8 @@
+# One line-ending convention regardless of contributor OS: LF in the repo and
+# in every checkout, so Windows machines never churn whole files to CRLF.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
